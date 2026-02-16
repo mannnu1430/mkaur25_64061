@@ -1,0 +1,443 @@
+---
+title: "Assignment1_AML"
+author: "Manpreet Kaur"
+date: "2026-02-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Step 1: Install & Load Libraries**
+```{r}
+#install.packages("keras3")
+library(keras3)
+
+```
+**Step 2: Load and Preprocess Data**
+```{r}
+# Load IMDB dataset
+max_features <- 10000   # keep top 10k words
+maxlen <- 500           # cut texts after 500 words
+
+imdb <- dataset_imdb(num_words = max_features)
+c(c(x_train, y_train), c(x_test, y_test)) %<-% imdb
+
+# Pad sequences so all reviews are the same length
+x_train <- pad_sequences(x_train, maxlen = maxlen)
+x_test  <- pad_sequences(x_test,  maxlen = maxlen)
+
+```
+**Step 3: Baseline Model (2 hidden layers, relu, 16 units)**
+```{r}
+baseline_model <- keras_model_sequential() %>%
+  layer_embedding(input_dim = max_features, output_dim = 32, input_length = maxlen) %>%
+  layer_flatten() %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+baseline_model %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_baseline <- baseline_model %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_split = 0.2
+)
+
+```
+
+**Step 4: Variations You Need to Test**
+1. Vary Number of Hidden Layers
+```{r}
+# One hidden layer
+model_1layer <- keras_model_sequential() %>%
+  layer_embedding(max_features, 32, input_length = maxlen) %>%
+  layer_flatten() %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+```{r}
+# Three hidden layers
+model_3layer <- keras_model_sequential() %>%
+  layer_embedding(max_features, 32, input_length = maxlen) %>%
+  layer_flatten() %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+```
+2. Vary Units (32, 64, etc.)
+```{r}
+model_units <- keras_model_sequential() %>%
+  layer_embedding(max_features, 32, input_length = maxlen) %>%
+  layer_flatten() %>%
+  layer_dense(units = 64, activation = "relu") %>%   # Try 32, 64, 128
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+3. Change Loss Function to MSE
+```{r}
+model_mse <- keras_model_sequential() %>%
+  layer_embedding(max_features, 32, input_length = maxlen) %>%
+  layer_flatten() %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+model_mse %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",   # Mean Squared Error
+  metrics = c("accuracy")
+)
+
+```
+4. Change Activation to Tanh
+```{r}
+model_tanh <- keras_model_sequential() %>%
+  layer_embedding(max_features, 32, input_length = maxlen) %>%
+  layer_flatten() %>%
+  layer_dense(units = 16, activation = "tanh") %>%   # tanh
+  layer_dense(units = 16, activation = "tanh") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+5. Add Dropout / Regularization
+```{r}
+model_dropout <- keras_model_sequential() %>%
+  layer_embedding(max_features, 32, input_length = maxlen) %>%
+  layer_flatten() %>%
+  layer_dense(units = 64, activation = "relu", kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>%   # Dropout layer
+  layer_dense(units = 64, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+**Step 5: Compare Results**
+
+For each model:
+Example with baseline model
+```{r}
+history_baseline <- baseline_model %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_split = 0.2
+)
+
+score_baseline <- baseline_model %>% evaluate(x_test, y_test)
+print(score_baseline)
+```
+Example with 1 hidden layer model
+```{r}
+model_1layer %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_1layer <- model_1layer %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_split = 0.2
+)
+
+score_1layer <- model_1layer %>% evaluate(x_test, y_test)
+print(score_1layer)
+
+```
+
+Example with 3 Hidden Layers Model
+```{r}
+# Compile
+model_3layer %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+# Fit
+history_3layer <- model_3layer %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_split = 0.2
+)
+
+# Evaluate
+score_3layer <- model_3layer %>% evaluate(x_test, y_test)
+print(score_3layer)
+
+```
+
+Example with More Units (64)
+```{r}
+# Compile
+model_units %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+# Fit
+history_units <- model_units %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_split = 0.2
+)
+
+# Evaluate
+score_units <- model_units %>% evaluate(x_test, y_test)
+print(score_units)
+
+```
+
+
+Example: MSE Loss Function
+```{r}
+# Compile
+model_mse %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",   # Using Mean Squared Error
+  metrics = c("accuracy")
+)
+
+# Fit
+history_mse <- model_mse %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_split = 0.2
+)
+
+# Evaluate
+score_mse <- model_mse %>% evaluate(x_test, y_test)
+print(score_mse)
+
+```
+
+Example with Tanh Activation
+```{r}
+# Compile
+model_tanh %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+# Fit
+history_tanh <- model_tanh %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_split = 0.2
+)
+
+# Evaluate
+score_tanh <- model_tanh %>% evaluate(x_test, y_test)
+print(score_tanh)
+
+```
+
+
+Example with Dropout model
+```{r}
+model_dropout %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_dropout <- model_dropout %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_split = 0.2
+)
+
+score_dropout <- model_dropout %>% evaluate(x_test, y_test)
+print(score_dropout)
+
+```
+**Plot**
+
+1) Lightweight base-R plot (robust to acc / accuracy)
+```{r}
+plot_history <- function(history, metric = c("accuracy", "loss")) {
+  metric <- match.arg(metric)
+  metrics <- history$metrics
+  
+  # detect accuracy name
+  acc_name <- if (!is.null(metrics$accuracy)) "accuracy" else if (!is.null(metrics$acc)) "acc" else NULL
+  if (metric == "accuracy" && is.null(acc_name)) stop("No accuracy metric found in history.")
+  
+  if (metric == "accuracy") {
+    train <- metrics[[acc_name]]
+    val   <- metrics[[paste0("val_", acc_name)]]
+    ylab <- "Accuracy"
+  } else {
+    train <- metrics$loss
+    val   <- metrics$val_loss
+    ylab <- "Loss"
+  }
+  
+  epochs <- seq_along(train)
+  ylim <- range(c(train, val), na.rm = TRUE)
+  
+  plot(epochs, train, type = "o", pch = 16, ylim = ylim,
+       xlab = "Epoch", ylab = ylab, main = paste("Training vs Validation", ylab))
+  lines(epochs, val, type = "o", pch = 17)
+  legend("bottomright", legend = c("train", "validation"), pch = c(16,17), lty = 1)
+}
+
+```
+Usage:
+```{r}
+plot_history(history_baseline, "accuracy")
+plot_history(history_baseline, "loss")
+
+```
+
+2) Pretty ggplot2 plot (single history)
+```{r}
+# requires packages
+if(!requireNamespace("ggplot2", quietly = TRUE)) install.packages("ggplot2")
+if(!requireNamespace("tidyr", quietly = TRUE)) install.packages("tidyr")
+library(ggplot2); library(tidyr)
+
+plot_history_gg <- function(history, metric = c("accuracy", "loss")) {
+  metric <- match.arg(metric)
+  metrics <- history$metrics
+  acc_name <- if (!is.null(metrics$accuracy)) "accuracy" else if (!is.null(metrics$acc)) "acc" else NULL
+  if (metric == "accuracy" && is.null(acc_name)) stop("No accuracy metric found.")
+  
+  if (metric == "accuracy") {
+    train <- metrics[[acc_name]]
+    val   <- metrics[[paste0("val_", acc_name)]]
+    ylab <- "Accuracy"
+  } else {
+    train <- metrics$loss
+    val   <- metrics$val_loss
+    ylab <- "Loss"
+  }
+  
+  df <- data.frame(
+    epoch = 1:length(train),
+    train = train,
+    validation = val
+  )
+  df_long <- pivot_longer(df, cols = c("train","validation"), names_to = "set", values_to = "value")
+  
+  ggplot(df_long, aes(x = epoch, y = value, color = set)) +
+    geom_line() + geom_point(size = 1) +
+    labs(title = paste("Training vs Validation", ylab), y = ylab, x = "Epoch") +
+    theme_minimal()
+}
+
+```
+Usage:
+```{r}
+plot_history_gg(history_baseline, "accuracy")
+
+```
+
+
+3) Compare multiple histories (ggplot) — great for experiments
+```{r}
+# histories: named list of history objects, e.g. list(baseline = history_baseline, one = history_1layer)
+compare_histories <- function(histories, metric = c("accuracy", "loss")) {
+  metric <- match.arg(metric)
+  library(dplyr); library(tidyr); library(ggplot2)
+  
+  df_all <- lapply(names(histories), function(nm) {
+    h <- histories[[nm]]$metrics
+    acc_name <- if (!is.null(h$accuracy)) "accuracy" else if (!is.null(h$acc)) "acc" else NULL
+    if (metric == "accuracy" && is.null(acc_name)) stop(paste("No accuracy metric for", nm))
+    
+    if (metric == "accuracy") {
+      train <- h[[acc_name]]
+      val   <- h[[paste0("val_", acc_name)]]
+      ylab <- "Accuracy"
+    } else {
+      train <- h$loss
+      val   <- h$val_loss
+      ylab <- "Loss"
+    }
+    df <- data.frame(epoch = 1:length(train),
+                     train = train,
+                     validation = val,
+                     model = nm)
+    pivot_longer(df, cols = c("train","validation"), names_to = "set", values_to = "value")
+  })
+  
+  df_combined <- bind_rows(df_all)
+  
+  ggplot(df_combined, aes(x = epoch, y = value, color = model, linetype = set)) +
+    geom_line() + geom_point(size = 0.8) +
+    labs(title = paste("Compare models —", metric), x = "Epoch", y = metric) +
+    theme_minimal()
+}
+
+```
+Usage:
+```{r}
+histories_list <- list(
+  baseline = history_baseline,
+  one_layer = history_1layer,
+  dropout = history_dropout
+)
+compare_histories(histories_list, "accuracy")
+
+```
+
+**Summary Table and Graph**
+```{r}
+# Load libraries
+library(knitr)
+library(ggplot2)
+
+# Collect results (make sure you trained & evaluated all models!)
+results <- data.frame(
+  Model = c("Baseline (2 layers, relu, 16 units)",
+            "1 hidden layer",
+            "3 hidden layers",
+            "More units (64)",
+            "Loss = MSE",
+            "Activation = tanh",
+            "Dropout + L2 regularization"),
+
+  Test_Accuracy = c(score_baseline$accuracy,
+                  score_1layer$accuracy,
+                  score_3layer$accuracy,
+                  score_units$accuracy,
+                  score_mse$accuracy,
+                  score_tanh$accuracy,
+                  score_dropout$accuracy)
+
+)
+
+# Summary table
+kable(results, caption = "Comparison of Model Variants on IMDB Test Set")
+
+# Comparison bar chart
+ggplot(results, aes(x = reorder(Model, Test_Accuracy), y = Test_Accuracy, fill = Model)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "IMDB Model Comparison (Hyperparameter Tuning)",
+       y = "Test Accuracy",
+       x = "Model Variant") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
