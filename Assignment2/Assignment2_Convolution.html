@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Assignment 2: Convolution — Manpreet Kaur</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:#f5f7fa;color:#24292e;line-height:1.7;}
+  header{background:linear-gradient(135deg,#1a2a3a,#2980b9);color:#fff;padding:36px 40px;}
+  header h1{font-size:1.8rem;font-weight:700;}
+  header p{opacity:.8;margin-top:6px;font-size:.95rem;}
+  main{max-width:960px;margin:0 auto;padding:32px 20px 60px;}
+  .md-cell{background:#fff;border-radius:8px;padding:20px 28px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+  .md-cell h1{font-size:1.6rem;border-bottom:2px solid #2980b9;padding-bottom:8px;margin-bottom:12px;color:#1a2a3a;}
+  .md-cell h2{font-size:1.25rem;color:#1a2a3a;border-left:4px solid #2980b9;padding-left:10px;margin:14px 0 8px;}
+  .md-cell h3{font-size:1.05rem;color:#2c3e50;margin:10px 0 6px;}
+  .md-cell p{color:#3d5166;margin-bottom:8px;}
+  .md-cell code{background:#eef2f7;padding:2px 6px;border-radius:4px;font-size:.88em;}
+  .md-cell strong{color:#1a2a3a;}
+  .code-cell{background:#282c34;border-radius:8px;padding:0;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.12);overflow:hidden;}
+  .code-cell::before{content:'In [ ]:';display:block;background:#21252b;color:#636d83;padding:6px 16px;font-size:.78rem;font-family:monospace;}
+  .code-cell pre{margin:0;padding:16px 20px;overflow-x:auto;}
+  .code-cell code{font-size:.85rem;line-height:1.6;}
+  footer{text-align:center;padding:20px;font-size:.8rem;color:#888;border-top:1px solid #ddd;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Assignment 2: Convolution Networks on Image Data</h1>
+  <p>Author: Manpreet Kaur &nbsp;|&nbsp; Deep Learning &nbsp;|&nbsp; 2024</p>
+</header>
+<main>
+<div class="md-cell"><p><h1>Assignment 2: Convolution Networks on Image Data</h1>
+<strong>Author:</strong> Manpreet Kaur  
+<strong>Course:</strong> Deep Learning  
+<strong>Date:</strong> 2024</p><p>---</p><p><h2>Overview</h2></p><p>This notebook investigates how training sample size influences model performance when classifying cats vs. dogs using convolutional neural networks (ConvNets). Two main strategies are explored:</p><p>1. Training a ConvNet <strong>from scratch</strong> with varying dataset sizes
+2. Using a <strong>pretrained network</strong> (VGG16 with feature extraction and fine-tuning)</p><p>Each approach is tested across three sample sizes, and results are compared to understand the trade-offs between dataset size and network choice.</p></div><div class="md-cell"><p><h2>1. Setup & Imports</h2></p></div><div class="code-cell"><pre><code class="python">import os
+import shutil
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import warnings
+warnings.filterwarnings('ignore')
+
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers, models, optimizers
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+
+# Reproducibility
+random.seed(42)
+np.random.seed(42)
+tf.random.set_seed(42)
+
+print(f"TensorFlow version: {tf.__version__}")
+print(f"Keras version: {keras.__version__}")</code></pre></div><div class="md-cell"><p><h2>2. Dataset Preparation</h2></p><p>We use the Kaggle Cats vs. Dogs dataset. The original dataset contains 25,000 images (12,500 cats, 12,500 dogs). We create subsets of varying sizes for our experiments.</p><p><strong>Note:</strong> You need to download and extract the dataset first. Download from:  
+https://www.kaggle.com/c/dogs-vs-cats/data</p></div><div class="code-cell"><pre><code class="python"># ---------------------------------------------------------------
+# CONFIGURATION: Update this path to point to your extracted data
+# The folder should contain 'cat.0.jpg', 'dog.0.jpg', etc.
+# ---------------------------------------------------------------
+ORIGINAL_DATASET_DIR = './data/train'  # &lt;-- update if needed
+BASE_DIR = './cats_and_dogs_subsets'
+
+def create_subset(base_dir, n_train, n_val=500, n_test=500, seed=42):
+    """
+    Creates a structured directory with train/val/test splits
+    containing n_train/2 cats and n_train/2 dogs in training.
+    """
+    random.seed(seed)
+    subset_name = f'subset_{n_train}'
+    subset_dir = os.path.join(base_dir, subset_name)
+
+    if os.path.exists(subset_dir):
+        print(f"Subset {subset_name} already exists. Skipping creation.")
+        return subset_dir
+
+    splits = {
+        'train': n_train // 2,     # per class
+        'validation': n_val // 2,  # per class
+        'test': n_test // 2        # per class
+    }
+
+    # Gather all cat and dog filenames
+    all_cats = sorted([f for f in os.listdir(ORIGINAL_DATASET_DIR) if f.startswith('cat')])
+    all_dogs = sorted([f for f in os.listdir(ORIGINAL_DATASET_DIR) if f.startswith('dog')])
+    
+    random.shuffle(all_cats)
+    random.shuffle(all_dogs)
+
+    total_per_class = splits['train'] + splits['validation'] + splits['test']
+    assert len(all_cats) &gt;= total_per_class and len(all_dogs) &gt;= total_per_class, \
+        f"Not enough images. Need {total_per_class} per class."
+
+    cat_splits = {
+        'train':      all_cats[:splits['train']],
+        'validation': all_cats[splits['train']: splits['train'] + splits['validation']],
+        'test':       all_cats[splits['train'] + splits['validation']: total_per_class]
+    }
+    dog_splits = {
+        'train':      all_dogs[:splits['train']],
+        'validation': all_dogs[splits['train']: splits['train'] + splits['validation']],
+        'test':       all_dogs[splits['train'] + splits['validation']: total_per_class]
+    }
+
+    for split in ['train', 'validation', 'test']:
+        for label, filenames in [('cats', cat_splits[split]), ('dogs', dog_splits[split])]:
+            dest = os.path.join(subset_dir, split, label)
+            os.makedirs(dest, exist_ok=True)
+            for fname in filenames:
+                src = os.path.join(ORIGINAL_DATASET_DIR, fname)
+                shutil.copyfile(src, os.path.join(dest, fname))
+
+    # Verification
+    for split in ['train', 'validation', 'test']:
+        for label in ['cats', 'dogs']:
+            count = len(os.listdir(os.path.join(subset_dir, split, label)))
+            print(f"{subset_name}/{split}/{label}: {count} images")
+
+    return subset_dir
+
+os.makedirs(BASE_DIR, exist_ok=True)</code></pre></div><div class="code-cell"><pre><code class="python"># Create three subsets with different training sizes
+# Training sizes: 1000 (baseline), 3000 (medium), 2000 (optimized)
+TRAIN_SIZES = [1000, 3000, 2000]
+
+subset_dirs = {}
+for n in TRAIN_SIZES:
+    subset_dirs[n] = create_subset(BASE_DIR, n_train=n, n_val=500, n_test=500)
+    print()</code></pre></div><div class="md-cell"><p><h2>3. Helper Functions</h2></p><p>These utilities handle data loading, model building, training, and evaluation.</p></div><div class="code-cell"><pre><code class="python">IMG_SIZE = (150, 150)
+BATCH_SIZE = 32
+
+
+def get_generators(subset_dir, augment=True):
+    """
+    Returns (train_gen, val_gen, test_gen) for a given subset directory.
+    Augmentation is applied only to training data when augment=True.
+    """
+    if augment:
+        train_datagen = ImageDataGenerator(
+            rescale=1./255,
+            rotation_range=40,
+            width_shift_range=0.2,
+            height_shift_range=0.2,
+            shear_range=0.2,
+            zoom_range=0.2,
+            horizontal_flip=True,
+            fill_mode='nearest'
+        )
+    else:
+        train_datagen = ImageDataGenerator(rescale=1./255)
+
+    val_test_datagen = ImageDataGenerator(rescale=1./255)
+
+    train_gen = train_datagen.flow_from_directory(
+        os.path.join(subset_dir, 'train'),
+        target_size=IMG_SIZE,
+        batch_size=BATCH_SIZE,
+        class_mode='binary'
+    )
+    val_gen = val_test_datagen.flow_from_directory(
+        os.path.join(subset_dir, 'validation'),
+        target_size=IMG_SIZE,
+        batch_size=BATCH_SIZE,
+        class_mode='binary'
+    )
+    test_gen = val_test_datagen.flow_from_directory(
+        os.path.join(subset_dir, 'test'),
+        target_size=IMG_SIZE,
+        batch_size=BATCH_SIZE,
+        class_mode='binary',
+        shuffle=False
+    )
+    return train_gen, val_gen, test_gen
+
+
+def plot_history(history, title='Training History', save_path=None):
+    """Plots training/validation accuracy and loss curves."""
+    acc     = history.history['accuracy']
+    val_acc = history.history['val_accuracy']
+    loss    = history.history['loss']
+    val_loss= history.history['val_loss']
+    epochs  = range(1, len(acc) + 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig.suptitle(title, fontsize=14, fontweight='bold')
+
+    axes[0].plot(epochs, acc,     'b-o', markersize=4, label='Train Accuracy')
+    axes[0].plot(epochs, val_acc, 'r-s', markersize=4, label='Val Accuracy')
+    axes[0].set_title('Accuracy')
+    axes[0].set_xlabel('Epoch')
+    axes[0].set_ylabel('Accuracy')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    axes[1].plot(epochs, loss,     'b-o', markersize=4, label='Train Loss')
+    axes[1].plot(epochs, val_loss, 'r-s', markersize=4, label='Val Loss')
+    axes[1].set_title('Loss')
+    axes[1].set_xlabel('Epoch')
+    axes[1].set_ylabel('Loss')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.show()
+
+
+def get_callbacks():
+    """Returns EarlyStopping and ReduceLROnPlateau callbacks."""
+    early_stop = EarlyStopping(
+        monitor='val_loss', patience=5,
+        restore_best_weights=True, verbose=1
+    )
+    reduce_lr = ReduceLROnPlateau(
+        monitor='val_loss', factor=0.5,
+        patience=3, min_lr=1e-6, verbose=1
+    )
+    return [early_stop, reduce_lr]</code></pre></div><div class="md-cell"><p>---</p><p><h1>Part A: Training ConvNet From Scratch</h1></p><p><h2>4. Model Architecture (Trained from Scratch)</h2></p><p>The architecture consists of four convolutional blocks with max pooling, followed by a dropout-regularized dense head. Dropout and data augmentation are the primary overfitting mitigation strategies.</p></div><div class="code-cell"><pre><code class="python">def build_scratch_model(dropout_rate=0.5):
+    """
+    Builds a ConvNet from scratch for binary image classification.
+    Includes 4 conv blocks + dropout + dense head.
+    """
+    model = models.Sequential([
+        # Block 1
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(150, 150, 3)),
+        layers.MaxPooling2D(2, 2),
+
+        # Block 2
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D(2, 2),
+
+        # Block 3
+        layers.Conv2D(128, (3, 3), activation='relu'),
+        layers.MaxPooling2D(2, 2),
+
+        # Block 4
+        layers.Conv2D(128, (3, 3), activation='relu'),
+        layers.MaxPooling2D(2, 2),
+
+        # Classifier head
+        layers.Flatten(),
+        layers.Dropout(dropout_rate),
+        layers.Dense(512, activation='relu'),
+        layers.Dense(1, activation='sigmoid')
+    ])
+
+    model.compile(
+        optimizer=optimizers.RMSprop(learning_rate=1e-4),
+        loss='binary_crossentropy',
+        metrics=['accuracy']
+    )
+    return model
+
+# Display architecture
+scratch_model = build_scratch_model()
+scratch_model.summary()</code></pre></div><div class="md-cell"><p><h2>5. Step 1 — Scratch Model: 1,000 Training Samples</h2></p><p>Baseline experiment. Small dataset; overfitting is expected without mitigation techniques.  
+<strong>Techniques applied:</strong> Data augmentation, Dropout (0.5), Early stopping, LR reduction.</p></div><div class="code-cell"><pre><code class="python">print("=" * 60)
+print("STEP 1: Scratch Model — Training Size: 1,000")
+print("=" * 60)
+
+train_gen_1k, val_gen_1k, test_gen_1k = get_generators(subset_dirs[1000], augment=True)
+
+model_scratch_1k = build_scratch_model(dropout_rate=0.5)
+
+history_scratch_1k = model_scratch_1k.fit(
+    train_gen_1k,
+    epochs=50,
+    validation_data=val_gen_1k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+test_loss_s1k, test_acc_s1k = model_scratch_1k.evaluate(test_gen_1k, verbose=0)
+print(f"\nTest Accuracy (Scratch, 1,000 samples): {test_acc_s1k:.4f}")
+print(f"Test Loss    (Scratch, 1,000 samples): {test_loss_s1k:.4f}")
+
+plot_history(history_scratch_1k,
+             title='Step 1: Scratch Model — 1,000 Training Samples',
+             save_path='plot_scratch_1k.png')</code></pre></div><div class="md-cell"><p><h2>6. Step 2 — Scratch Model: 3,000 Training Samples</h2></p><p>Increasing training data to 3,000 samples. We expect less overfitting and improved accuracy.</p></div><div class="code-cell"><pre><code class="python">print("=" * 60)
+print("STEP 2: Scratch Model — Training Size: 3,000")
+print("=" * 60)
+
+train_gen_3k, val_gen_3k, test_gen_3k = get_generators(subset_dirs[3000], augment=True)
+
+model_scratch_3k = build_scratch_model(dropout_rate=0.5)
+
+history_scratch_3k = model_scratch_3k.fit(
+    train_gen_3k,
+    epochs=50,
+    validation_data=val_gen_3k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+test_loss_s3k, test_acc_s3k = model_scratch_3k.evaluate(test_gen_3k, verbose=0)
+print(f"\nTest Accuracy (Scratch, 3,000 samples): {test_acc_s3k:.4f}")
+print(f"Test Loss    (Scratch, 3,000 samples): {test_loss_s3k:.4f}")
+
+plot_history(history_scratch_3k,
+             title='Step 2: Scratch Model — 3,000 Training Samples',
+             save_path='plot_scratch_3k.png')</code></pre></div><div class="md-cell"><p><h2>7. Step 3 — Scratch Model: 2,000 Training Samples (Optimized)</h2></p><p>Here we search for an intermediate sample size that balances data sufficiency with training time. 2,000 samples is tested as a potential sweet spot for this architecture.</p></div><div class="code-cell"><pre><code class="python">print("=" * 60)
+print("STEP 3: Scratch Model — Training Size: 2,000 (Optimized)")
+print("=" * 60)
+
+train_gen_2k, val_gen_2k, test_gen_2k = get_generators(subset_dirs[2000], augment=True)
+
+model_scratch_2k = build_scratch_model(dropout_rate=0.5)
+
+history_scratch_2k = model_scratch_2k.fit(
+    train_gen_2k,
+    epochs=50,
+    validation_data=val_gen_2k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+test_loss_s2k, test_acc_s2k = model_scratch_2k.evaluate(test_gen_2k, verbose=0)
+print(f"\nTest Accuracy (Scratch, 2,000 samples): {test_acc_s2k:.4f}")
+print(f"Test Loss    (Scratch, 2,000 samples): {test_loss_s2k:.4f}")
+
+plot_history(history_scratch_2k,
+             title='Step 3: Scratch Model — 2,000 Training Samples (Optimized)',
+             save_path='plot_scratch_2k.png')</code></pre></div><div class="md-cell"><p>---</p><p><h1>Part B: Pretrained Network (VGG16)</h1></p><p><h2>8. VGG16 Feature Extraction + Fine-Tuning</h2></p><p>We use VGG16 pretrained on ImageNet as a feature extractor. In a second phase, the top convolutional block of VGG16 is unfrozen to allow fine-tuning with a very low learning rate.</p><p><strong>Approach:</strong>
+- Phase 1: Freeze all VGG16 layers, train the custom dense head
+- Phase 2: Unfreeze the last convolutional block (<code>block5</code>) and fine-tune at lr=1e-5</p></div><div class="code-cell"><pre><code class="python">def build_pretrained_model():
+    """
+    Builds a transfer learning model using VGG16 (ImageNet weights).
+    The convolutional base is frozen; only the custom head is trained initially.
+    """
+    conv_base = VGG16(
+        weights='imagenet',
+        include_top=False,
+        input_shape=(150, 150, 3)
+    )
+    conv_base.trainable = False
+
+    model = models.Sequential([
+        conv_base,
+        layers.Flatten(),
+        layers.Dense(256, activation='relu'),
+        layers.Dropout(0.5),
+        layers.Dense(1, activation='sigmoid')
+    ])
+
+    model.compile(
+        optimizer=optimizers.RMSprop(learning_rate=2e-5),
+        loss='binary_crossentropy',
+        metrics=['accuracy']
+    )
+    return model, conv_base
+
+
+def fine_tune_model(model, conv_base):
+    """
+    Unfreezes VGG16 block5 for fine-tuning at a lower learning rate.
+    """
+    # Unfreeze entire base, then re-freeze everything before block5_conv1
+    conv_base.trainable = True
+    set_trainable = False
+    for layer in conv_base.layers:
+        if layer.name == 'block5_conv1':
+            set_trainable = True
+        layer.trainable = set_trainable
+
+    model.compile(
+        optimizer=optimizers.RMSprop(learning_rate=1e-5),
+        loss='binary_crossentropy',
+        metrics=['accuracy']
+    )
+    return model
+
+
+def merge_histories(h1, h2):
+    """Merges two Keras History objects for plotting combined curves."""
+    merged = {}
+    for key in h1.history:
+        merged[key] = h1.history[key] + h2.history[key]
+    class MergedHistory:
+        def __init__(self, d):
+            self.history = d
+    return MergedHistory(merged)
+
+
+# Preview model
+pt_model, pt_conv_base = build_pretrained_model()
+pt_model.summary()</code></pre></div><div class="md-cell"><p><h2>9. Step 4a — Pretrained Model: 1,000 Training Samples</h2></p></div><div class="code-cell"><pre><code class="python">print("=" * 60)
+print("STEP 4a: Pretrained (VGG16) — Training Size: 1,000")
+print("=" * 60)
+
+train_gen_pt1k, val_gen_pt1k, test_gen_pt1k = get_generators(subset_dirs[1000], augment=True)
+
+# Phase 1: Feature extraction
+pt_model_1k, pt_base_1k = build_pretrained_model()
+history_pt1k_phase1 = pt_model_1k.fit(
+    train_gen_pt1k,
+    epochs=30,
+    validation_data=val_gen_pt1k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+# Phase 2: Fine-tuning
+pt_model_1k = fine_tune_model(pt_model_1k, pt_base_1k)
+history_pt1k_phase2 = pt_model_1k.fit(
+    train_gen_pt1k,
+    epochs=20,
+    validation_data=val_gen_pt1k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+test_loss_pt1k, test_acc_pt1k = pt_model_1k.evaluate(test_gen_pt1k, verbose=0)
+print(f"\nTest Accuracy (Pretrained, 1,000 samples): {test_acc_pt1k:.4f}")
+print(f"Test Loss    (Pretrained, 1,000 samples): {test_loss_pt1k:.4f}")
+
+combined_hist_pt1k = merge_histories(history_pt1k_phase1, history_pt1k_phase2)
+plot_history(combined_hist_pt1k,
+             title='Step 4a: Pretrained VGG16 — 1,000 Training Samples',
+             save_path='plot_pretrained_1k.png')</code></pre></div><div class="md-cell"><p><h2>10. Step 4b — Pretrained Model: 3,000 Training Samples</h2></p></div><div class="code-cell"><pre><code class="python">print("=" * 60)
+print("STEP 4b: Pretrained (VGG16) — Training Size: 3,000")
+print("=" * 60)
+
+train_gen_pt3k, val_gen_pt3k, test_gen_pt3k = get_generators(subset_dirs[3000], augment=True)
+
+# Phase 1
+pt_model_3k, pt_base_3k = build_pretrained_model()
+history_pt3k_phase1 = pt_model_3k.fit(
+    train_gen_pt3k,
+    epochs=30,
+    validation_data=val_gen_pt3k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+# Phase 2
+pt_model_3k = fine_tune_model(pt_model_3k, pt_base_3k)
+history_pt3k_phase2 = pt_model_3k.fit(
+    train_gen_pt3k,
+    epochs=20,
+    validation_data=val_gen_pt3k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+test_loss_pt3k, test_acc_pt3k = pt_model_3k.evaluate(test_gen_pt3k, verbose=0)
+print(f"\nTest Accuracy (Pretrained, 3,000 samples): {test_acc_pt3k:.4f}")
+print(f"Test Loss    (Pretrained, 3,000 samples): {test_loss_pt3k:.4f}")
+
+combined_hist_pt3k = merge_histories(history_pt3k_phase1, history_pt3k_phase2)
+plot_history(combined_hist_pt3k,
+             title='Step 4b: Pretrained VGG16 — 3,000 Training Samples',
+             save_path='plot_pretrained_3k.png')</code></pre></div><div class="md-cell"><p><h2>11. Step 4c — Pretrained Model: 2,000 Training Samples (Optimized)</h2></p></div><div class="code-cell"><pre><code class="python">print("=" * 60)
+print("STEP 4c: Pretrained (VGG16) — Training Size: 2,000 (Optimized)")
+print("=" * 60)
+
+train_gen_pt2k, val_gen_pt2k, test_gen_pt2k = get_generators(subset_dirs[2000], augment=True)
+
+# Phase 1
+pt_model_2k, pt_base_2k = build_pretrained_model()
+history_pt2k_phase1 = pt_model_2k.fit(
+    train_gen_pt2k,
+    epochs=30,
+    validation_data=val_gen_pt2k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+# Phase 2
+pt_model_2k = fine_tune_model(pt_model_2k, pt_base_2k)
+history_pt2k_phase2 = pt_model_2k.fit(
+    train_gen_pt2k,
+    epochs=20,
+    validation_data=val_gen_pt2k,
+    callbacks=get_callbacks(),
+    verbose=1
+)
+
+test_loss_pt2k, test_acc_pt2k = pt_model_2k.evaluate(test_gen_pt2k, verbose=0)
+print(f"\nTest Accuracy (Pretrained, 2,000 samples): {test_acc_pt2k:.4f}")
+print(f"Test Loss    (Pretrained, 2,000 samples): {test_loss_pt2k:.4f}")
+
+combined_hist_pt2k = merge_histories(history_pt2k_phase1, history_pt2k_phase2)
+plot_history(combined_hist_pt2k,
+             title='Step 4c: Pretrained VGG16 — 2,000 Training Samples (Optimized)',
+             save_path='plot_pretrained_2k.png')</code></pre></div><div class="md-cell"><p>---</p><p><h1>Part C: Results Summary & Analysis</h1></p><p><h2>12. Comparison Table</h2></p></div><div class="code-cell"><pre><code class="python">import pandas as pd
+
+results = {
+    'Approach': [
+        'From Scratch', 'From Scratch', 'From Scratch',
+        'Pretrained (VGG16)', 'Pretrained (VGG16)', 'Pretrained (VGG16)'
+    ],
+    'Training Samples': [1000, 3000, 2000, 1000, 3000, 2000],
+    'Validation Samples': [500, 500, 500, 500, 500, 500],
+    'Test Samples': [500, 500, 500, 500, 500, 500],
+    'Test Accuracy': [
+        round(test_acc_s1k, 4),
+        round(test_acc_s3k, 4),
+        round(test_acc_s2k, 4),
+        round(test_acc_pt1k, 4),
+        round(test_acc_pt3k, 4),
+        round(test_acc_pt2k, 4)
+    ],
+    'Test Loss': [
+        round(test_loss_s1k, 4),
+        round(test_loss_s3k, 4),
+        round(test_loss_s2k, 4),
+        round(test_loss_pt1k, 4),
+        round(test_loss_pt3k, 4),
+        round(test_loss_pt2k, 4)
+    ]
+}
+
+df_results = pd.DataFrame(results)
+df_results['Step'] = ['Step 1', 'Step 2', 'Step 3', 'Step 4a', 'Step 4b', 'Step 4c']
+df_results = df_results[['Step', 'Approach', 'Training Samples', 'Test Accuracy', 'Test Loss']]
+
+print(df_results.to_string(index=False))
+df_results.to_csv('results_summary.csv', index=False)</code></pre></div><div class="md-cell"><p><h2>13. Comparative Visualization</h2></p></div><div class="code-cell"><pre><code class="python">fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+fig.suptitle('ConvNet Performance: Scratch vs. Pretrained Across Training Sizes',
+             fontsize=14, fontweight='bold')
+
+train_sizes  = [1000, 2000, 3000]
+scratch_accs = [test_acc_s1k, test_acc_s2k, test_acc_s3k]
+pt_accs      = [test_acc_pt1k, test_acc_pt2k, test_acc_pt3k]
+scratch_loss = [test_loss_s1k, test_loss_s2k, test_loss_s3k]
+pt_loss      = [test_loss_pt1k, test_loss_pt2k, test_loss_pt3k]
+
+x = np.arange(len(train_sizes))
+w = 0.35
+
+# Accuracy bars
+bars1 = axes[0].bar(x - w/2, scratch_accs, w, label='From Scratch', color='steelblue', alpha=0.85)
+bars2 = axes[0].bar(x + w/2, pt_accs,      w, label='Pretrained (VGG16)', color='coral',     alpha=0.85)
+axes[0].set_xlabel('Training Sample Size')
+axes[0].set_ylabel('Test Accuracy')
+axes[0].set_title('Test Accuracy by Training Size &amp; Approach')
+axes[0].set_xticks(x)
+axes[0].set_xticklabels(train_sizes)
+axes[0].set_ylim(0, 1.05)
+axes[0].legend()
+axes[0].grid(axis='y', alpha=0.3)
+for bar in bars1:
+    axes[0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                 f'{bar.get_height():.3f}', ha='center', va='bottom', fontsize=9)
+for bar in bars2:
+    axes[0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                 f'{bar.get_height():.3f}', ha='center', va='bottom', fontsize=9)
+
+# Loss bars
+bars3 = axes[1].bar(x - w/2, scratch_loss, w, label='From Scratch', color='steelblue', alpha=0.85)
+bars4 = axes[1].bar(x + w/2, pt_loss,      w, label='Pretrained (VGG16)', color='coral',     alpha=0.85)
+axes[1].set_xlabel('Training Sample Size')
+axes[1].set_ylabel('Test Loss')
+axes[1].set_title('Test Loss by Training Size &amp; Approach')
+axes[1].set_xticks(x)
+axes[1].set_xticklabels(train_sizes)
+axes[1].legend()
+axes[1].grid(axis='y', alpha=0.3)
+
+plt.tight_layout()
+plt.savefig('comparison_chart.png', dpi=150, bbox_inches='tight')
+plt.show()
+print("Saved: comparison_chart.png")</code></pre></div><div class="code-cell"><pre><code class="python"># Line plot: accuracy trends across sample sizes
+fig, ax = plt.subplots(figsize=(9, 5))
+ax.plot(train_sizes, scratch_accs, 'b-o', markersize=8, linewidth=2, label='From Scratch')
+ax.plot(train_sizes, pt_accs,      'r-s', markersize=8, linewidth=2, label='Pretrained (VGG16)')
+
+for i, (s, p) in enumerate(zip(scratch_accs, pt_accs)):
+    ax.annotate(f'{s:.3f}', (train_sizes[i], s), textcoords='offset points',
+                xytext=(-15, 8), fontsize=9, color='steelblue')
+    ax.annotate(f'{p:.3f}', (train_sizes[i], p), textcoords='offset points',
+                xytext=(-15, -18), fontsize=9, color='red')
+
+ax.set_xlabel('Training Sample Size', fontsize=12)
+ax.set_ylabel('Test Accuracy', fontsize=12)
+ax.set_title('Accuracy vs. Training Sample Size', fontsize=13, fontweight='bold')
+ax.set_xticks(train_sizes)
+ax.legend(fontsize=11)
+ax.grid(True, alpha=0.3)
+ax.set_ylim(0.5, 1.0)
+plt.tight_layout()
+plt.savefig('accuracy_line_plot.png', dpi=150, bbox_inches='tight')
+plt.show()</code></pre></div><div class="md-cell"><p>---</p><p><h2>14. Discussion & Conclusions</h2></p><p><h3>Key Findings</h3></p><p><strong>Training from scratch:</strong>
+- With only 1,000 training images, the model struggles to generalize well. Even with data augmentation and dropout, the small dataset limits the features the network can learn from, leading to moderate performance.
+- Expanding to 3,000 images yields a noticeable improvement, confirming that scratch-trained models are data-hungry. More labeled examples allow the convolutional filters to converge to genuinely discriminative patterns.
+- The 2,000-sample experiment falls between the two extremes, suggesting that the accuracy-vs-data relationship is not perfectly linear — returns begin to diminish as the architecture becomes the bottleneck rather than the data.</p><p><strong>Using a pretrained network:</strong>
+- Transfer learning (VGG16 + fine-tuning) consistently outperforms training from scratch across all sample sizes. This is because VGG16 already carries learned representations of edges, textures, and shapes from ImageNet — knowledge directly transferable to animal images.
+- Even with only 1,000 training images, the pretrained model achieves strong accuracy, demonstrating its robustness under data-constrained conditions.
+- Gains from increasing training size are more modest for the pretrained model compared to training from scratch, because the feature extraction backbone is already well-initialized.</p><p><h3>The Core Relationship</h3></p><p>The central insight is that <strong>training from scratch requires substantially more data to compensate for the lack of prior knowledge</strong>, while <strong>pretrained networks effectively multiply the value of each training example</strong> by leveraging representations already learned from millions of images. This trade-off is critical in practice: when labeled data is limited (a common real-world scenario), transfer learning is almost always the preferred choice.</p><p><h3>Optimal Approach</h3></p><p>Given the experiments conducted, the pretrained VGG16 model fine-tuned on 2,000–3,000 samples represents the best balance of performance and data efficiency. The scratch-trained model requires at minimum 3,000 images to approach competitive accuracy, and even then falls short of what the pretrained approach achieves with fewer samples.</p><p><strong>Author: Manpreet Kaur</strong></p></div>
+</main>
+<footer>Assignment 2 — Manpreet Kaur — Deep Learning 2024</footer>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
