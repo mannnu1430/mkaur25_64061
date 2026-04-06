@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assignment 3: Time-Series Data</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    color: #000;
+    background-color: #fff;
+    margin: 40px;
+    line-height: 1.6;
+  }
+  h1, h2, h3 {
+    font-weight: bold;
+  }
+  h1 {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  h2 {
+    margin-top: 30px;
+    border-bottom: 1px solid #000;
+    padding-bottom: 4px;
+  }
+  h3 {
+    margin-top: 15px;
+  }
+  p {
+    text-align: justify;
+  }
+  img {
+    display: block;
+    margin: 10px auto 20px;
+    width: 600px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+  }
+  th, td {
+    border: 1px solid #000;
+    padding: 8px;
+    text-align: center;
+  }
+  th {
+    font-weight: bold;
+  }
+  ul {
+    margin: 10px 0;
+  }
+  footer {
+    text-align: center;
+    margin-top: 40px;
+    font-size: 0.9em;
+  }
+  hr {
+    margin-top: 30px;
+  }
+</style>
+</head>
+
+<body>
+
+<h1>Assignment 3: Time-Series Data</h1>
+
+<h2>1. Introduction</h2>
+<p>
+This assignment focuses on comparing three deep learning models—Long Short-Term Memory (<b>LSTM</b>), Gated Recurrent Unit (<b>GRU</b>), 
+and a hybrid Convolutional Neural Network combined with LSTM (<b>CNN + LSTM</b>)—for time-series forecasting. 
+The primary aim is to evaluate each model’s capacity to learn both short-term and long-term dependencies and to assess their accuracy and generalization ability.
+</p>
+<p>
+Each model was trained using the same dataset and parameters to ensure fairness in comparison. The final evaluation was based on the Mean Absolute Error (MAE), 
+which provides a direct measurement of prediction accuracy. Lower MAE values indicate better model performance.
+</p>
+
+<h2>2. Visual Summary of Model Performance</h2>
+<p>
+The figures below provide a visual comparison of each model’s performance and a summarized table of results.
+</p>
+
+<h3>Figure 1: Validation MAE Comparison</h3>
+<img src="Unknown" alt="Model Performance Graph">
+
+<h3>Figure 2: Summary Table of Model Metrics</h3>
+<img src="Unknown-2" alt="Model Performance Table">
+
+<h2>3. Quantitative Comparison</h2>
+<p>
+The following table highlights the strengths, limitations, and best use cases for each model based on training results and validation performance.
+</p>
+
+<table>
+<thead>
+<tr><th>Model</th><th>Strengths</th><th>Limitations</th><th>Best Use Case</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><b>LSTM</b></td>
+  <td>Highly effective at learning long-term temporal patterns through gated memory units.</td>
+  <td>Slower to train and can overfit without proper regularization.</td>
+  <td>Best for applications that require understanding of long historical dependencies.</td>
+</tr>
+<tr>
+  <td><b>GRU</b></td>
+  <td>Efficient and faster to train, requiring fewer parameters while maintaining competitive accuracy.</td>
+  <td>May be slightly less accurate for very long sequential data.</td>
+  <td>Useful for moderate-sized datasets or when computational resources are limited.</td>
+</tr>
+<tr>
+  <td><b>CNN + LSTM</b></td>
+  <td>Combines convolutional feature extraction for local patterns with LSTM’s sequence learning for global patterns. Achieved the lowest MAE in this study.</td>
+  <td>Requires careful parameter tuning for best performance.</td>
+  <td>Ideal for time-series forecasting that includes both short-term and long-term trends.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>4. Model Interpretations</h2>
+<p>
+Each model exhibited distinct behavior during training and validation. The <b>LSTM</b> showed strong performance in modeling long-range dependencies 
+but took more epochs to converge. The <b>GRU</b> demonstrated efficient learning and faster convergence with slightly less complexity. 
+The <b>CNN + LSTM</b> hybrid outperformed both by integrating the advantages of convolutional and recurrent architectures, 
+resulting in more stable and accurate predictions.
+</p>
+
+<h3>Key Observations</h3>
+<ul>
+  <li>The CNN + LSTM model achieved the lowest MAE, confirming its superior ability to generalize.</li>
+  <li>LSTM and GRU models both captured temporal relationships effectively but differed in computational efficiency.</li>
+  <li>The hybrid model’s use of convolutional layers allowed it to identify fine-grained temporal features before sequential learning.</li>
+  <li>Validation and test MAE scores were closely aligned for the hybrid model, indicating strong reliability and low overfitting.</li>
+</ul>
+
+<h2>5. Analysis and Interpretation</h2>
+<p>
+The <b>CNN + LSTM</b> architecture provides a layered understanding of time-series data. The convolutional component acts as a feature extractor, 
+identifying local fluctuations and seasonal variations, while the LSTM component processes these extracted features to model longer-term patterns. 
+This layered approach makes it particularly effective for datasets with both short- and long-term dependencies.
+</p>
+<p>
+Both <b>LSTM</b> and <b>GRU</b> remain valuable architectures. The LSTM is best suited for complex temporal tasks where long memory retention is crucial, 
+whereas the GRU is preferred when faster training or limited resources are priorities. However, when higher predictive accuracy and robustness 
+are required, the hybrid CNN + LSTM model is the most effective choice.
+</p>
+
+<h2>6. Final Conclusion</h2>
+<p>
+Based on the experimental results, the <b>CNN + LSTM hybrid model</b> achieved the best overall forecasting performance. 
+It combined local feature detection with long-range sequence modeling, resulting in accurate and consistent predictions. 
+This proves that combining convolutional and recurrent layers enhances both precision and interpretability in time-series analysis.
+</p>
+<p>
+Future improvements could involve implementing attention-based models or transformer architectures to further refine prediction accuracy. 
+In addition, expanding the approach to multivariate forecasting—where multiple variables influence predictions—could lead to even more reliable real-world forecasting systems.
+</p>
+
+<footer>
+<hr>
+<p>Assignment 3: Time-Series Data | April 2026</p>
+</footer>
+
+</body>
+</html>
